@@ -14,8 +14,8 @@ import tempfile
 load_dotenv()
 
 # Load groq and hugging face API
-groq_api_key = "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"
-os.environ['HUGGINGFACEHUB_API_TOKEN'] = "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"
+groq_api_key = os.getenv("GROQ_API_KEY")
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
 st.title("Chatgroq with llama3")
 
@@ -31,24 +31,32 @@ prompt = ChatPromptTemplate.from_template(
     """
 )
 
+
 def vector_embedding(uploaded_file):
     if "vectors" not in st.session_state:
         st.session_state.embeddings = HuggingFaceBgeEmbeddings(
             model_name="BAAI/bge-small-en-v1.5",  # sentence-transformers/all-MiniLM-l6-v2
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True},
         )
-        
+
         # Save the uploaded file to a temporary file
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             tmp_file.write(uploaded_file.read())
             tmp_file_path = tmp_file.name
-        
+
         st.session_state.loader = PyPDFLoader(tmp_file_path)
         st.session_state.docs = st.session_state.loader.load()
-        st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs)
-        st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, st.session_state.embeddings)
+        st.session_state.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=200
+        )
+        st.session_state.final_documents = (
+            st.session_state.text_splitter.split_documents(st.session_state.docs)
+        )
+        st.session_state.vectors = FAISS.from_documents(
+            st.session_state.final_documents, st.session_state.embeddings
+        )
+
 
 uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
@@ -61,16 +69,17 @@ prompt1 = st.text_input("Enter the question from the uploaded document")
 
 if prompt1 and "vectors" in st.session_state:
     import time
+
     start = time.process_time()
-    
+
     document_chain = create_stuff_documents_chain(llm, prompt)
     retriever = st.session_state.vectors.as_retriever()
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
-    response = retrieval_chain.invoke({'input': prompt1})
-    
+    response = retrieval_chain.invoke({"input": prompt1})
+
     st.write("Response Time: ", time.process_time() - start)
-    st.write(response['answer'])
-    
+    st.write(response["answer"])
+
     with st.expander("Document Similarity Search"):
         for i, doc in enumerate(response["context"]):
             st.write(doc.page_content)
